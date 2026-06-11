@@ -5,6 +5,8 @@ import shutil
 import subprocess
 import yaml
 
+DOCKER = (os.environ.get("DOCKER_CMD", "docker")).split()
+
 
 def main():
     with open("config.yml") as f:
@@ -38,10 +40,10 @@ def main():
         port = base_port + i - 1
         ws = os.path.abspath(os.path.join(ws_dir, sid))
 
-        subprocess.run(["docker", "rm", "-f", sid], capture_output=True)
+        subprocess.run([*DOCKER, "rm", "-f", sid], capture_output=True)
 
         cmd = [
-            "docker", "run", "-d",
+            *DOCKER, "run", "-d",
             "--name", sid,
             "--cpus", str(cpu),
             "--memory", memory,
@@ -96,6 +98,14 @@ def generate_nginx(config):
     L.append("")
     L.append("        location = /assign {")
     L.append(f"            proxy_pass http://127.0.0.1:{auth_port}/assign;")
+    L.append("        }")
+    L.append("")
+    L.append("        location = /leave {")
+    L.append(f"            proxy_pass http://127.0.0.1:{auth_port}/leave;")
+    L.append("        }")
+    L.append("")
+    L.append("        location = /admin {")
+    L.append(f"            proxy_pass http://127.0.0.1:{auth_port}/admin;")
     L.append("        }")
     L.append("")
     L.append("        location ~ ^/s/(student-\\d+)$ {")

@@ -7,119 +7,164 @@ CYAN='\033[0;36m'
 BOLD='\033[1m'
 NC='\033[0m'
 
+BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$BASE_DIR"
+
 echo ""
 echo -e "${BOLD}═══════════════════════════════════════════${NC}"
 echo -e "${BOLD}  HKU Manim Workshop — Setup${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════${NC}"
 echo ""
 
-BASE_DIR="$(cd "$(dirname "$0")" && pwd)"
-cd "$BASE_DIR"
-
 # ── Detect OS ──────────────────────────────────────────────
 if [ "$(uname)" = "Darwin" ]; then
     OS="macos"
     echo -e "  OS:        ${CYAN}macOS${NC}"
+    DOCKER_CMD="docker"
+    SUDO=""
 else
     OS="linux"
-    echo -e "  OS:        ${CYAN}Linux (EC2)${NC}"
+    echo -e "  OS:        ${CYAN}Linux${NC}"
+    DOCKER_CMD="sudo docker"
+    SUDO="sudo"
+    export DOCKER_CMD
 fi
 
-# ── Check / Install Docker ─────────────────────────────────
+# ── Read config ────────────────────────────────────────────
+IMAGE=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['image'])")
+AUTH_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])")
+NGINX_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['nginx_port'])")
+ADMIN_PW=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['admin_password'])")
+
+# ── [1/7] Install Docker ───────────────────────────────────
 echo ""
-echo -e "${BOLD}[1/6] Docker${NC}"
+echo -e "${BOLD}[1/7] Docker${NC}"
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} Docker is running"
+elif [ "$OS" = "linux" ]; then
+    echo "  Installing Docker..."
+    $SUDO apt-get update -qq
+    $SUDO apt-get install -y -qq docker.io
+    $SUDO systemctl enable docker
+    $SUDO systemctl start docker
+    $SUDO usermod -aG docker "$USER"
+    # docker won't work without sudo until next login, but sudo docker works
+    DOCKER_CMD="sudo docker"
+    echo -e "  ${GREEN}✓${NC} Docker installed (using sudo for this session)"
 else
-    echo -e "  Docker not found or not running. Installing..."
-    if [ "$OS" = "linux" ]; then
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq docker.io >/dev/null
-        sudo systemctl enable docker
-        sudo systemctl start docker
-        sudo usermod -aG docker "$USER"
-        echo -e "  ${GREEN}✓${NC} Docker installed"
-        echo ""
-        echo -e "  ${RED}⚠  Docker added you to the docker group.${NC}"
-        echo -e "  ${RED}   Run this command, then re-run ./setup.sh:${NC}"
-        echo ""
-        echo -e "     newgrp docker"
-        echo ""
-        echo -e "  Or log out and SSH back in."
-        exit 0
-    else
-        echo -e "  ${RED}✗${NC} Please open Docker Desktop first, then re-run this script."
-        exit 1
-    fi
+    echo -e "  ${RED}✗${NC} Please open Docker Desktop first, then re-run this script."
+    exit 1
 fi
 
-# ── Check / Install Nginx ──────────────────────────────────
+# ── [2/7] Install Nginx ────────────────────────────────────
 echo ""
-echo -e "${BOLD}[2/6] Nginx${NC}"
+echo -e "${BOLD}[2/7] Nginx${NC}"
 if command -v nginx >/dev/null 2>&1; then
-    echo -e "  ${GREEN}✓${NC} Nginx is installed"
+    echo -e "  ${GREEN}✓${NC} Nginx found"
 else
-    echo -e "  Installing nginx..."
+    echo "  Installing nginx..."
     if [ "$OS" = "linux" ]; then
-        sudo apt-get install -y -qq nginx >/dev/null
+        $SUDO apt-get install -y -qq nginx
     else
-        brew install nginx >/dev/null 2>&1
+        brew install nginx 2>/dev/null || true
     fi
     echo -e "  ${GREEN}✓${NC} Nginx installed"
 fi
 
-# ── Check / Install Python packages ────────────────────────
+# ── [3/7] Python dependencies ──────────────────────────────
 echo ""
-echo -e "${BOLD}[3/6] Python dependencies${NC}"
-PIP_INSTALL="no"
+echo -e "${BOLD}[3/7] Python dependencies${NC}"
 for pkg in fastapi uvicorn pyyaml; do
-    python3 -c "import $pkg" 2>/dev/null || PIP_INSTALL="yes"
+    python3 -c "import $pkg" 2>/dev/null || NEED_PIP=1
 done
-if [ "$PIP_INSTALL" = "yes" ]; then
-    echo -e "  Installing fastapi, uvicorn, pyyaml..."
+if [ -n "$NEED_PIP" ]; then
+    echo "  Installing fastapi, uvicorn, pyyaml..."
     pip3 install -q fastapi uvicorn pyyaml 2>/dev/null || pip install -q fastapi uvicorn pyyaml
     echo -e "  ${GREEN}✓${NC} Python packages installed"
 else
     echo -e "  ${GREEN}✓${NC} All Python packages present"
 fi
 
-# ── Pull Docker image ──────────────────────────────────────
-IMAGE=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['image'])")
+# ── [4/7] Install Cloudflared ──────────────────────────────
 echo ""
-echo -e "${BOLD}[4/6] Pulling Docker image${NC}"
-echo -e "  ${CYAN}${IMAGE}${NC}"
-docker pull "$IMAGE"
-echo -e "  ${GREEN}✓${NC} Image ready"
+echo -e "${BOLD}[4/7] Cloudflare Tunnel${NC}"
+if command -v cloudflared >/dev/null 2>&1; then
+    echo -e "  ${GREEN}✓${NC} cloudflared found"
+else
+    echo "  Installing cloudflared..."
+    if [ "$OS" = "linux" ]; then
+        CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        $SUDO curl -fsSL "$CLOUDFLARED_URL" -o /usr/local/bin/cloudflared
+        $SUDO chmod +x /usr/local/bin/cloudflared
+    else
+        brew install cloudflared 2>/dev/null || {
+            CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64"
+            $SUDO curl -fsSL "$CLOUDFLARED_URL" -o /usr/local/bin/cloudflared
+            $SUDO chmod +x /usr/local/bin/cloudflared
+        }
+    fi
+    echo -e "  ${GREEN}✓${NC} cloudflared installed"
+fi
 
-# ── Initialize ─────────────────────────────────────────────
+# ── [5/7] Build Docker image ───────────────────────────────
 echo ""
-echo -e "${BOLD}[5/6] Creating workspaces & containers${NC}"
+echo -e "${BOLD}[5/7] Docker image${NC}"
+echo -e "  Pulling base image and installing opencode..."
+# Always rebuild to get the latest opencode
+$DOCKER_CMD build -t "$IMAGE" -f "$BASE_DIR/Dockerfile" "$BASE_DIR"
+echo -e "  ${GREEN}✓${NC} Image built: ${CYAN}${IMAGE}${NC}"
+
+# ── [6/7] Initialize workspaces ────────────────────────────
+echo ""
+echo -e "${BOLD}[6/7] Initialize workspaces${NC}"
+# Stop any existing containers first
+for c in $($DOCKER_CMD ps --filter "name=student-" --format "{{.Names}}" 2>/dev/null); do
+    $DOCKER_CMD stop "$c" >/dev/null 2>&1
+    $DOCKER_CMD rm "$c" >/dev/null 2>&1
+    echo "  cleaned up old container: $c"
+done
 python3 init.py
 
-# ── Start services ─────────────────────────────────────────
-AUTH_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])")
-NGINX_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['nginx_port'])")
+# ── [7/7] Start services ───────────────────────────────────
+echo ""
+echo -e "${BOLD}[7/7] Start services${NC}"
 
+# Stop any prior instances
 if [ -f .auth_pid ]; then
     kill "$(cat .auth_pid)" 2>/dev/null || true
 fi
+if [ -f .tunnel_pid ]; then
+    kill "$(cat .tunnel_pid)" 2>/dev/null || true
+    rm -f .tunnel_pid
+fi
+nginx -s stop 2>/dev/null || true
+sleep 1
 
-echo ""
-echo -e "${BOLD}[6/6] Starting services${NC}"
+# Start auth server
+echo "  Starting auth server on :$AUTH_PORT..."
 python3 -m uvicorn auth_server:app --host 127.0.0.1 --port "$AUTH_PORT" > /tmp/manim-auth.log 2>&1 &
 echo $! > .auth_pid
 sleep 1
+echo -e "  ${GREEN}✓${NC} Auth server running"
 
-nginx -s stop 2>/dev/null || true
-sleep 0.5
+# Start nginx
+echo "  Starting nginx on :$NGINX_PORT..."
 nginx -c "$BASE_DIR/nginx.conf"
-echo -e "  ${GREEN}✓${NC} Auth server + Nginx running"
+echo -e "  ${GREEN}✓${NC} Nginx running"
 
-# ── Get public IP ──────────────────────────────────────────
-PUBLIC_IP=""
-if [ "$OS" = "linux" ]; then
-    PUBLIC_IP=$(curl -s --connect-timeout 3 http://checkip.amazonaws.com 2>/dev/null || true)
-fi
+# Start Cloudflare tunnel
+echo "  Starting Cloudflare tunnel..."
+cloudflared tunnel --url "http://localhost:$NGINX_PORT" > /tmp/manim-tunnel.log 2>&1 &
+echo $! > .tunnel_pid
+echo "  Waiting for tunnel URL..."
+TUNNEL_URL=""
+for i in $(seq 1 15); do
+    sleep 1
+    TUNNEL_URL=$(grep -o 'https://[^ ]*trycloudflare\.com' /tmp/manim-tunnel.log 2>/dev/null | head -1) || true
+    if [ -n "$TUNNEL_URL" ]; then
+        break
+    fi
+done
 
 # ── Done ───────────────────────────────────────────────────
 echo ""
@@ -127,11 +172,18 @@ echo -e "${BOLD}═════════════════════�
 echo -e "${BOLD}  Ready!${NC}"
 echo -e "${BOLD}═══════════════════════════════════════════${NC}"
 echo ""
-if [ -n "$PUBLIC_IP" ]; then
-    echo -e "  Students open:  ${GREEN}http://${PUBLIC_IP}/${NC}"
+
+if [ -n "$TUNNEL_URL" ]; then
+    echo -e "  ${BOLD}Public URL:${NC}   ${GREEN}${TUNNEL_URL}/${NC}"
 else
-    echo -e "  Students open:  ${GREEN}http://localhost:${NGINX_PORT}/${NC}"
+    echo -e "  Tunnel may still be initializing. Check:"
+    echo -e "    ${CYAN}cat /tmp/manim-tunnel.log${NC}"
+    echo ""
+    echo -e "  ${BOLD}Local URL:${NC}    http://localhost:${NGINX_PORT}/"
 fi
+
+echo -e "  ${BOLD}Admin:${NC}        http://localhost:${NGINX_PORT}/admin"
+echo -e "  ${BOLD}Password:${NC}     ${CYAN}${ADMIN_PW}${NC}"
 echo ""
 echo -e "  Stop:     ${CYAN}./cleanup.sh${NC}"
 echo -e "  Reset:    ${CYAN}curl -X POST http://localhost:${AUTH_PORT}/reset/student-01${NC}"

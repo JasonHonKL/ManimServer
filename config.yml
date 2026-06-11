@@ -4,6 +4,7 @@ memory: "1g"
 base_port: 8001
 auth_port: 9000
 nginx_port: 8080
-image: "manimcommunity/manim:stable"
+image: "manim-server-student"
 data_dir: "data"
 workspaces_dir: "workspaces"
+admin_password: "workshop2024"

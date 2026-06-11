@@ -15,6 +15,11 @@ if [ -f .auth_pid ]; then
     rm -f .auth_pid
 fi
 
+if [ -f .tunnel_pid ]; then
+    kill "$(cat .tunnel_pid)" 2>/dev/null && echo "Cloudflare tunnel stopped"
+    rm -f .tunnel_pid
+fi
+
 nginx -c "$(pwd)/nginx.conf" -s stop 2>/dev/null && echo "Nginx stopped" || true
 
 rm -rf workspaces/

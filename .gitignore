@@ -1,3 +1,4 @@
 workspaces/
 .auth_pid
+.tunnel_pid
 nginx.conf
