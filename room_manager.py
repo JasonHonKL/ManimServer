@@ -71,10 +71,7 @@ class RoomManager:
 
         owner = self._room_to_name.get(room_id)
         if owner is None:
-            self._name_to_room[name] = room_id
-            self._room_to_name[room_id] = name
-            self._assigned_at[room_id] = time.time()
-            return True
+            return False
 
         return owner == name
 
@@ -103,3 +100,11 @@ class RoomManager:
             t = time.strftime("%H:%M:%S", time.localtime(ts)) if ts else ""
             result.append(RoomSnapshot(room_id=room, name=name, assigned_at=t))
         return result
+
+    def reset_all(self) -> int:
+        """Clear all room assignments. Returns count of rooms freed."""
+        count = len(self._room_to_name)
+        self._name_to_room.clear()
+        self._room_to_name.clear()
+        self._assigned_at.clear()
+        return count

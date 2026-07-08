@@ -43,8 +43,6 @@ body::before {
   letter-spacing: -0.01em;
   color: #86868b;
   margin-bottom: 24px;
-  opacity: 0;
-  animation: reveal 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) 0.1s forwards;
 }
 h1 {
   font-size: clamp(40px, 8vw, 56px);
@@ -53,8 +51,6 @@ h1 {
   line-height: 1.07;
   color: #1d1d1f;
   margin-bottom: 20px;
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.2s forwards;
 }
 .subtitle {
   font-size: clamp(17px, 3vw, 21px);
@@ -63,8 +59,6 @@ h1 {
   line-height: 1.38;
   margin-bottom: 48px;
   letter-spacing: -0.01em;
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.35s forwards;
 }
 .spots {
   font-size: 14px;
@@ -72,14 +66,18 @@ h1 {
   color: #86868b;
   margin-bottom: 28px;
   letter-spacing: -0.01em;
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.5s forwards;
 }
 .cta {
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.6s forwards;
+  opacity: 1;
 }
 .field { margin-bottom: 16px; }
+.field-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+.field-row .field { margin-bottom: 0; }
 .field input {
   width: 100%;
   max-width: 280px;
@@ -139,15 +137,6 @@ button:active, .btn:active { background: #006edb; }
   font-weight: 400;
   color: #aeaeb2;
   letter-spacing: 0.02em;
-  opacity: 0;
-  animation: reveal 1s cubic-bezier(0.25, 0.1, 0.25, 1) 0.8s forwards;
-}
-@keyframes reveal {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; }
 }"""
 
 _ADMIN_CSS = """\
@@ -212,8 +201,13 @@ def landing_page(cookie_name: str | None, rooms: RoomManager) -> str:
     else:
         cta = """\
   <form action="/assign" method="get" class="cta">
-    <div class="field">
-      <input type="text" id="name" name="name" placeholder="Your name" autocomplete="off" autofocus required>
+    <div class="field-row">
+      <div class="field">
+        <input type="text" id="first_name" name="first_name" placeholder="First name" autocomplete="off" autofocus required>
+      </div>
+      <div class="field">
+        <input type="text" id="last_name" name="last_name" placeholder="Last name" autocomplete="off" required>
+      </div>
     </div>
     <button type="submit">Get Started</button>
   </form>"""
@@ -291,7 +285,7 @@ a { color: #4a90d9; }
 <body>
 <h1>Room Locked</h1>
 <p>This room belongs to someone else.</p>
-<p><a href="/">Enter your name to join</a></p>
+<p><a href="/">Enter your first and last name to join</a></p>
 </body></html>"""
 
 

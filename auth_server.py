@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 
@@ -8,7 +9,16 @@ from auth_utils import verify_basic
 
 config = load_config()
 rooms = RoomManager(config.num_students)
-app = FastAPI()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    count = rooms.reset_all()
+    print(f"[startup] Cleared {count} stale room assignments")
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
 
 
 @app.get("/")
@@ -19,11 +29,13 @@ async def landing(request: Request):
 
 
 @app.get("/assign")
-async def assign(request: Request, name: str = ""):
-    name = name.strip()
-    if not name:
+async def assign(request: Request, first_name: str = "", last_name: str = ""):
+    first_name = first_name.strip()
+    last_name = last_name.strip()
+    if not first_name or not last_name:
         return RedirectResponse(url="/")
 
+    name = f"{first_name} {last_name}"
     room = rooms.assign(name)
     if room is None:
         return HTMLResponse(full_page(), status_code=503)
@@ -73,6 +85,14 @@ async def reset(room_id: str, request: Request):
         return Response(status_code=403)
     rooms.reset(room_id)
     return {"status": "ok", "room": room_id}
+
+
+@app.post("/reset-all")
+async def reset_all(request: Request):
+    if request.client.host not in ("127.0.0.1", "::1", "testclient"):
+        return Response(status_code=403)
+    count = rooms.reset_all()
+    return {"status": "ok", "rooms_cleared": count}
 
 
 @app.get("/health")

@@ -147,6 +147,9 @@ echo $! > .auth_pid
 sleep 1
 echo -e "  ${GREEN}✓${NC} Auth server running"
 
+# Clear all room assignments from any previous session
+curl -sf -X POST "http://localhost:$AUTH_PORT/reset-all" >/dev/null 2>&1 && echo "  ${GREEN}✓${NC} All rooms cleared" || true
+
 # Start nginx
 echo "  Starting nginx on :$NGINX_PORT..."
 nginx -c "$BASE_DIR/nginx.conf"
@@ -154,7 +157,7 @@ echo -e "  ${GREEN}✓${NC} Nginx running"
 
 # Start Cloudflare tunnel
 echo "  Starting Cloudflare tunnel..."
-cloudflared tunnel --url "http://localhost:$NGINX_PORT" > /tmp/manim-tunnel.log 2>&1 &
+cloudflared tunnel --protocol http2 --url "http://localhost:$NGINX_PORT" > /tmp/manim-tunnel.log 2>&1 &
 echo $! > .tunnel_pid
 echo "  Waiting for tunnel URL..."
 TUNNEL_URL=""
