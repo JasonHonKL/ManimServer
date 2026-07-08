@@ -93,13 +93,19 @@ if command -v cloudflared >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} cloudflared found"
 else
     echo "  Installing cloudflared..."
+    case "$(uname -m)" in
+        x86_64|amd64)  ARCH="amd64" ;;
+        aarch64|arm64) ARCH="arm64" ;;
+        armv7l)        ARCH="arm"   ;;
+        *) echo -e "  ${RED}✗${NC} Unsupported architecture: $(uname -m)"; exit 1 ;;
+    esac
     if [ "$OS" = "linux" ]; then
-        CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+        CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-${ARCH}"
         $SUDO curl -fsSL "$CLOUDFLARED_URL" -o /usr/local/bin/cloudflared
         $SUDO chmod +x /usr/local/bin/cloudflared
     else
         brew install cloudflared 2>/dev/null || {
-            CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-amd64"
+            CLOUDFLARED_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-${ARCH}"
             $SUDO curl -fsSL "$CLOUDFLARED_URL" -o /usr/local/bin/cloudflared
             $SUDO chmod +x /usr/local/bin/cloudflared
         }

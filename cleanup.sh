@@ -4,11 +4,13 @@ cd "$(dirname "$0")"
 
 echo "=== Stopping Manim Server ==="
 
-# Detect docker command (mirror setup.sh: use sudo on Linux)
+# Detect sudo usage (mirror setup.sh: use sudo on Linux)
 if [ "$(uname)" = "Darwin" ]; then
     DOCKER_CMD="docker"
+    SUDO=""
 else
     DOCKER_CMD="sudo docker"
+    SUDO="sudo"
 fi
 
 # Use the venv python if present, else fall back to system python3
@@ -40,7 +42,8 @@ fi
 
 nginx -c "$(pwd)/nginx.conf" -s stop 2>/dev/null && echo "Nginx stopped" || true
 
-rm -rf workspaces/
+# Workspaces contain files created by Docker (owned by root), so use sudo on Linux
+$SUDO rm -rf workspaces/
 echo "Workspaces removed"
 
 echo "=== Done ==="
