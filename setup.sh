@@ -149,7 +149,9 @@ if [ -f .tunnel_pid ]; then
     kill "$(cat .tunnel_pid)" 2>/dev/null || true
     rm -f .tunnel_pid
 fi
-nginx -s stop 2>/dev/null || true
+nginx -c "$BASE_DIR/nginx.conf" -s stop 2>/dev/null || true
+# Fallback: kill anything still bound to the nginx port
+lsof -ti :"$NGINX_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 sleep 1
 
 # Start auth server
