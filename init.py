@@ -8,6 +8,15 @@ import yaml
 DOCKER = (os.environ.get("DOCKER_CMD", "docker")).split()
 
 
+def remove_tree(path):
+    """Remove a directory tree, escalating to sudo for root-owned files
+    left behind by Docker containers."""
+    try:
+        shutil.rmtree(path)
+    except PermissionError:
+        subprocess.run(["sudo", "rm", "-rf", path], check=True)
+
+
 def main():
     with open("config.yml") as f:
         config = yaml.safe_load(f)
@@ -31,7 +40,7 @@ def main():
         sid = f"student-{i:02d}"
         dst = os.path.join(ws_dir, sid)
         if os.path.exists(dst):
-            shutil.rmtree(dst)
+            remove_tree(dst)
         shutil.copytree(data_dir, dst)
 
     print(f"Starting {num} containers...")
