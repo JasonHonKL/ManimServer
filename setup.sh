@@ -145,10 +145,9 @@ echo -e "${BOLD}[7/7] Start services${NC}"
 if [ -f .auth_pid ]; then
     kill "$(cat .auth_pid)" 2>/dev/null || true
 fi
-if [ -f .tunnel_pid ]; then
-    kill "$(cat .tunnel_pid)" 2>/dev/null || true
-    rm -f .tunnel_pid
-fi
+# Kill ALL cloudflared processes — orphaned tunnels cause Cloudflare 530 errors
+pkill -f "cloudflared tunnel" 2>/dev/null || true
+rm -f .tunnel_pid
 nginx -c "$BASE_DIR/nginx.conf" -s stop 2>/dev/null || true
 # Fallback: kill anything still bound to the nginx port
 lsof -ti :"$NGINX_PORT" 2>/dev/null | xargs kill 2>/dev/null || true

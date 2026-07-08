@@ -35,10 +35,9 @@ fi
 AUTH_PORT=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])" 2>/dev/null || echo 9000)
 lsof -ti :"$AUTH_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 
-if [ -f .tunnel_pid ]; then
-    kill "$(cat .tunnel_pid)" 2>/dev/null && echo "Cloudflare tunnel stopped"
-    rm -f .tunnel_pid
-fi
+# Kill ALL cloudflared tunnel processes (orphaned tunnels cause Cloudflare 530)
+pkill -f "cloudflared tunnel" 2>/dev/null && echo "Cloudflare tunnel(s) stopped" || true
+rm -f .tunnel_pid
 
 nginx -c "$(pwd)/nginx.conf" -s stop 2>/dev/null && echo "Nginx stopped" || true
 
