@@ -4,9 +4,23 @@ cd "$(dirname "$0")"
 
 echo "=== Stopping Manim Server ==="
 
+# Detect docker command (mirror setup.sh: use sudo on Linux)
+if [ "$(uname)" = "Darwin" ]; then
+    DOCKER_CMD="docker"
+else
+    DOCKER_CMD="sudo docker"
+fi
+
+# Use the venv python if present, else fall back to system python3
+if [ -f ./.venv/bin/python ]; then
+    PY="./.venv/bin/python"
+else
+    PY="python3"
+fi
+
 echo "Stopping containers..."
-for c in $(docker ps --filter "name=student-" --format "{{.Names}}"); do
-    docker stop "$c" >/dev/null && docker rm "$c" >/dev/null
+for c in $($DOCKER_CMD ps --filter "name=student-" --format "{{.Names}}"); do
+    $DOCKER_CMD stop "$c" >/dev/null && $DOCKER_CMD rm "$c" >/dev/null
     echo "  stopped $c"
 done
 
@@ -16,7 +30,7 @@ if [ -f .auth_pid ]; then
     rm -f .auth_pid
 fi
 # Also kill any lingering process on the auth port
-AUTH_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])" 2>/dev/null || echo 9000)
+AUTH_PORT=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])" 2>/dev/null || echo 9000)
 lsof -ti :"$AUTH_PORT" 2>/dev/null | xargs kill 2>/dev/null || true
 
 if [ -f .tunnel_pid ]; then

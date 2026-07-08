@@ -30,15 +30,30 @@ else
     export DOCKER_CMD
 fi
 
-# ── Read config ────────────────────────────────────────────
-IMAGE=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['image'])")
-AUTH_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])")
-NGINX_PORT=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['nginx_port'])")
-ADMIN_PW=$(python3 -c "import yaml; print(yaml.safe_load(open('config.yml'))['admin_password'])")
-
-# ── [1/7] Install Docker ───────────────────────────────────
+# ── [1/7] Python environment (uv + venv) ───────────────────
 echo ""
-echo -e "${BOLD}[1/7] Docker${NC}"
+echo -e "${BOLD}[1/7] Python environment${NC}"
+if ! command -v uv >/dev/null 2>&1; then
+    echo "  Installing uv..."
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    export PATH="$HOME/.local/bin:$PATH"
+fi
+echo "  Creating virtual environment..."
+uv venv "$BASE_DIR/.venv"
+PY="$BASE_DIR/.venv/bin/python"
+echo "  Installing Python packages..."
+uv pip install --python "$PY" -r "$BASE_DIR/requirements.txt"
+echo -e "  ${GREEN}✓${NC} Virtual environment ready"
+
+# ── Read config ────────────────────────────────────────────
+IMAGE=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['image'])")
+AUTH_PORT=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['auth_port'])")
+NGINX_PORT=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['nginx_port'])")
+ADMIN_PW=$($PY -c "import yaml; print(yaml.safe_load(open('config.yml'))['admin_password'])")
+
+# ── [2/7] Install Docker ───────────────────────────────────
+echo ""
+echo -e "${BOLD}[2/7] Docker${NC}"
 if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} Docker is running"
 elif [ "$OS" = "linux" ]; then
@@ -56,9 +71,9 @@ else
     exit 1
 fi
 
-# ── [2/7] Install Nginx ────────────────────────────────────
+# ── [3/7] Install Nginx ────────────────────────────────────
 echo ""
-echo -e "${BOLD}[2/7] Nginx${NC}"
+echo -e "${BOLD}[3/7] Nginx${NC}"
 if command -v nginx >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} Nginx found"
 else
@@ -69,20 +84,6 @@ else
         brew install nginx 2>/dev/null || true
     fi
     echo -e "  ${GREEN}✓${NC} Nginx installed"
-fi
-
-# ── [3/7] Python dependencies ──────────────────────────────
-echo ""
-echo -e "${BOLD}[3/7] Python dependencies${NC}"
-for pkg in fastapi uvicorn pyyaml; do
-    python3 -c "import $pkg" 2>/dev/null || NEED_PIP=1
-done
-if [ -n "$NEED_PIP" ]; then
-    echo "  Installing fastapi, uvicorn, pyyaml..."
-    pip3 install -q fastapi uvicorn pyyaml 2>/dev/null || pip install -q fastapi uvicorn pyyaml
-    echo -e "  ${GREEN}✓${NC} Python packages installed"
-else
-    echo -e "  ${GREEN}✓${NC} All Python packages present"
 fi
 
 # ── [4/7] Install Cloudflared ──────────────────────────────
@@ -123,7 +124,7 @@ for c in $($DOCKER_CMD ps --filter "name=student-" --format "{{.Names}}" 2>/dev/
     $DOCKER_CMD rm "$c" >/dev/null 2>&1
     echo "  cleaned up old container: $c"
 done
-python3 init.py
+$PY init.py
 
 # ── [7/7] Start services ───────────────────────────────────
 echo ""
@@ -142,7 +143,7 @@ sleep 1
 
 # Start auth server
 echo "  Starting auth server on :$AUTH_PORT..."
-python3 -m uvicorn auth_server:app --host 127.0.0.1 --port "$AUTH_PORT" > /tmp/manim-auth.log 2>&1 &
+$PY -m uvicorn auth_server:app --host 127.0.0.1 --port "$AUTH_PORT" > /tmp/manim-auth.log 2>&1 &
 echo $! > .auth_pid
 sleep 1
 echo -e "  ${GREEN}✓${NC} Auth server running"
