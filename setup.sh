@@ -89,10 +89,15 @@ fi
 # ── [4/7] Install Cloudflared ──────────────────────────────
 echo ""
 echo -e "${BOLD}[4/7] Cloudflare Tunnel${NC}"
-if command -v cloudflared >/dev/null 2>&1; then
+if command -v cloudflared >/dev/null 2>&1 && cloudflared --version >/dev/null 2>&1; then
     echo -e "  ${GREEN}✓${NC} cloudflared found"
 else
-    echo "  Installing cloudflared..."
+    if command -v cloudflared >/dev/null 2>&1; then
+        echo "  Reinstalling cloudflared (existing binary is broken/wrong arch)..."
+        $SUDO rm -f /usr/local/bin/cloudflared 2>/dev/null || true
+    else
+        echo "  Installing cloudflared..."
+    fi
     case "$(uname -m)" in
         x86_64|amd64)  ARCH="amd64" ;;
         aarch64|arm64) ARCH="arm64" ;;
